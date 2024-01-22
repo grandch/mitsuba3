@@ -276,6 +276,9 @@ struct SurfaceInteraction : Interaction<Float_, Spectrum_> {
     /// Does the surface mark a transition between two media?
     Mask is_medium_transition() const { return shape->is_medium_transition(); }
 
+    // Does
+    bool hasSubsurface() const { return shape->hasSubsurface();}
+
     /**
      * \brief Determine the target medium
      *
