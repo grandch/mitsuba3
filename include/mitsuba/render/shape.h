@@ -2,6 +2,7 @@
 
 #include <drjit/vcall.h>
 #include <mitsuba/render/records.h>
+#include <mitsuba/render/subsurface.h>
 #include <mitsuba/core/spectrum.h>
 #include <mitsuba/core/transform.h>
 #include <mitsuba/core/bbox.h>
@@ -809,6 +810,15 @@ public:
     /// Is this shape also an area sensor?
     bool is_sensor() const { return (bool) m_sensor; }
 
+    /// Does this shape have a sub-surface
+    bool hasSubsurface() const { return m_subsurface.get() != NULL; }
+
+    /// Return the subsurface associated with this shape (if any)
+    Subsurface *subsurface(Mask /*unused*/ = true) { return m_subsurface.get(); }
+
+    /// Return the subsurface associated with this shape (if any)
+    const Subsurface *subsurface(Mask /*unused*/ = true) const { return m_subsurface.get(); }
+
     /// Return the area sensor associated with this shape (if any)
     const Sensor *sensor(Mask /*unused*/ = true) const { return m_sensor.get(); }
     /// Return the area sensor associated with this shape (if any)
@@ -959,6 +969,7 @@ protected:
     ref<Sensor> m_sensor;
     ref<Medium> m_interior_medium;
     ref<Medium> m_exterior_medium;
+    ref<Subsurface> m_subsurface;
     std::string m_id;
     ShapeType m_shape_type = ShapeType::Other;
 
