@@ -229,6 +229,7 @@ public:
     using ScalarSize  = uint32_t;
     using Index = UInt32;
     using ScalarRay3f = Ray<ScalarPoint3f, Spectrum>;
+    using Subsurface = Subsurface<Float, Spectrum>;
 
     // =============================================================
     //! @{ \name Sampling routines
@@ -810,6 +811,11 @@ public:
     /// Is this shape also an area sensor?
     bool is_sensor() const { return (bool) m_sensor; }
 
+    /// Return the area sensor associated with this shape (if any)
+    const Sensor *sensor(Mask /*unused*/ = true) const { return m_sensor.get(); }
+    /// Return the area sensor associated with this shape (if any)
+    Sensor *sensor(Mask /*unused*/ = true) { return m_sensor.get(); }
+
     /// Does this shape have a sub-surface
     bool hasSubsurface() const { return m_subsurface.get() != NULL; }
 
@@ -818,11 +824,6 @@ public:
 
     /// Return the subsurface associated with this shape (if any)
     const Subsurface *subsurface(Mask /*unused*/ = true) const { return m_subsurface.get(); }
-
-    /// Return the area sensor associated with this shape (if any)
-    const Sensor *sensor(Mask /*unused*/ = true) const { return m_sensor.get(); }
-    /// Return the area sensor associated with this shape (if any)
-    Sensor *sensor(Mask /*unused*/ = true) { return m_sensor.get(); }
 
     /**
      * \brief Returns the number of sub-primitives that make up this shape
@@ -1105,6 +1106,7 @@ DRJIT_VCALL_TEMPLATE_BEGIN(mitsuba::Shape)
     DRJIT_VCALL_METHOD(surface_area)
     DRJIT_VCALL_GETTER(emitter, const typename Class::Emitter *)
     DRJIT_VCALL_GETTER(sensor, const typename Class::Sensor *)
+    DRJIT_VCALL_GETTER(subsurface, const typename Class::Subsurface *)
     DRJIT_VCALL_GETTER(bsdf, const typename Class::BSDF *)
     DRJIT_VCALL_GETTER(interior_medium, const typename Class::Medium *)
     DRJIT_VCALL_GETTER(exterior_medium, const typename Class::Medium *)
@@ -1115,6 +1117,7 @@ DRJIT_VCALL_TEMPLATE_BEGIN(mitsuba::Shape)
     auto is_sensor() const { return neq(sensor(), nullptr); }
     auto is_medium_transition() const { return neq(interior_medium(), nullptr) ||
                                                neq(exterior_medium(), nullptr); }
+    bool hasSubsurface() const { return neq(subsurface(), nullptr); }
 DRJIT_VCALL_TEMPLATE_END(mitsuba::Shape)
 
 //! @}

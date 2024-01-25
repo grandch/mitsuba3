@@ -148,6 +148,10 @@ public:
                                      /* ray_flags = */ +RayFlags::All,
                                      /* coherent = */ dr::eq(depth, 0u));
 
+            if (si.hasSubsurface()){}
+                // TODO
+                // result += throughput * si.LoSub(scene, sampler, -ray.d, depth);
+
             // ---------------------- Direct emission ----------------------
 
             /* dr::any_or() checks for active entries in the provided boolean
