@@ -31,7 +31,8 @@ public:
     std::pair<Ray3f, Spectrum> sample_ray(Float /*time*/, Float /*wavelength_sample*/,
                                           const Point2f &/*sample2*/,
                                           const Point2f & /*sample3*/,
-                                          Mask /*active*/) const override {                                  
+                                          Mask active) const override {  
+        MI_MASKED_FUNCTION(ProfilerPhase::EndpointSampleRay, active);                                
         return { Ray3f(0,0), Spectrum(0) };
     }
 
@@ -48,7 +49,7 @@ public:
     std::pair<DirectionSample3f, Spectrum>
     sample_direction(const Interaction3f & it, const Point2f & /*sample*/,
                      Mask active) const override {
-        
+        MI_MASKED_FUNCTION(ProfilerPhase::EndpointSampleDirection, active);
         Float a = dr::dot(-m_direction, -m_direction);
         Float b = 2 * dr::dot(-m_direction, it.p - m_position);
         Float c = dr::dot(it.p - m_position, it.p - m_position) - m_radius * m_radius;
@@ -87,7 +88,8 @@ public:
 
     Float pdf_direction(const Interaction3f & it,
                         const DirectionSample3f & /*ds*/,
-                        Mask /*active*/) const override {
+                        Mask active) const override {
+        MI_MASKED_FUNCTION(ProfilerPhase::EndpointEvaluate, active);
         Float a = dr::dot(-m_direction, -m_direction);
         Float b = 2 * dr::dot(-m_direction, it.p - m_position);
         Float c = dr::dot(it.p - m_position, it.p - m_position) - m_radius * m_radius;
@@ -118,6 +120,7 @@ public:
 
     Spectrum eval(const SurfaceInteraction3f & si,
                   Mask active) const override {
+        MI_MASKED_FUNCTION(ProfilerPhase::EndpointEvaluate, active);
         return depolarizer<Spectrum>(m_radiance->eval(si, active));
     }
 
