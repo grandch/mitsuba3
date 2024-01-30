@@ -22,6 +22,9 @@ public:
     void traverse(TraversalCallback *callback) override {
         Base::traverse(callback);
         callback->put_object("radiance", m_radiance.get(), +ParamFlags::Differentiable);
+        callback->put_parameter("radius", m_radius, +ParamFlags::Differentiable);
+        callback->put_parameter("position", (Point3f &) m_position.value(), +ParamFlags::Differentiable);
+        callback->put_parameter("direction", (ScalarVector3f &) m_direction.value(), +ParamFlags::Differentiable);
     }
 
     /*
@@ -50,20 +53,20 @@ public:
     sample_direction(const Interaction3f & it, const Point2f & /*sample*/,
                      Mask active) const override {
         MI_MASKED_FUNCTION(ProfilerPhase::EndpointSampleDirection, active);
-        Float a = dr::dot(-m_direction, -m_direction);
-        Float b = 2 * dr::dot(-m_direction, it.p - m_position);
-        Float c = dr::dot(it.p - m_position, it.p - m_position) - m_radius * m_radius;
+        Float a = dr::dot(-m_direction.value(), -m_direction.value());
+        Float b = 2 * dr::dot(-m_direction.value(), it.p - m_position.value());
+        Float c = dr::dot(it.p - m_position.value(), it.p - m_position.value()) - m_radius * m_radius;
         Float d = b*b - 4*a*c;
 
         DirectionSample3f ds;
-        ds.p      = m_position;
-        ds.n      = -m_direction;
+        ds.p      = m_position.value();
+        ds.n      = -m_direction.value();
         ds.uv     = 0.f;
         ds.time   = it.time;
         ds.pdf    = 0.f;
         ds.delta  = true;
         ds.emitter = this;
-        ds.d      = -m_direction;
+        ds.d      = -m_direction.value();
         ds.dist   = dr::norm(ds.p - it.p);
         
         if(dr::all(d < 0))
@@ -90,9 +93,9 @@ public:
                         const DirectionSample3f & /*ds*/,
                         Mask active) const override {
         MI_MASKED_FUNCTION(ProfilerPhase::EndpointEvaluate, active);
-        Float a = dr::dot(-m_direction, -m_direction);
-        Float b = 2 * dr::dot(-m_direction, it.p - m_position);
-        Float c = dr::dot(it.p - m_position, it.p - m_position) - m_radius * m_radius;
+        Float a = dr::dot(-m_direction.value(), -m_direction.value());
+        Float b = 2 * dr::dot(-m_direction.value(), it.p - m_position.value());
+        Float c = dr::dot(it.p - m_position.value(), it.p - m_position.value()) - m_radius * m_radius;
         Float d = b*b - 4*a*c;
         
         if(dr::any(d < 0))
@@ -138,8 +141,8 @@ public:
     MI_DECLARE_CLASS()
 private:
     ref<Texture> m_radiance;
-    Point3f m_position;
-    ScalarVector3f m_direction;
+    field<Point3f> m_position;
+    field<ScalarVector3f> m_direction;
     ScalarFloat m_radius;
 };
 
