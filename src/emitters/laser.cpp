@@ -63,30 +63,23 @@ public:
         ds.n      = -m_direction.value();
         ds.uv     = 0.f;
         ds.time   = it.time;
-        ds.pdf    = 0.f;
         ds.delta  = true;
         ds.emitter = this;
         ds.d      = -m_direction.value();
         ds.dist   = dr::norm(ds.p - it.p);
         
-        if(dr::all(d < 0))
-        {
-            return {ds, Spectrum(0)};
-        }
-            
+        active &= dr::all(d >= 0);
         
         Float t1 = (-b + dr::sqrt(d)) / (2 * a);
         Float t2 = (-b - dr::sqrt(d)) / (2 * a);
         
-        if(dr::all(0 <= t1 || 0 <= t2))
-        {
-            SurfaceInteraction3f si = dr::zeros<SurfaceInteraction3f>();
-            si.wavelengths = it.wavelengths;
-            ds.pdf = 1.f;
-            return {ds, depolarizer<Spectrum>(m_radiance->eval(si, active))};
-        }
+        SurfaceInteraction3f si = dr::zeros<SurfaceInteraction3f>();
+        si.wavelengths = it.wavelengths;
         
-        return {ds, dr::zeros<Spectrum>() };
+        active &= dr::all(0 <= t1 || 0 <= t2);
+        ds.pdf = dr::select(active, 1.f, 0.f);
+        
+        return {ds, depolarizer<Spectrum>(m_radiance->eval(si, active))};
     }
 
     Float pdf_direction(const Interaction3f & it,
@@ -98,16 +91,14 @@ public:
         Float c = dr::dot(it.p - m_position.value(), it.p - m_position.value()) - m_radius * m_radius;
         Float d = b*b - 4*a*c;
         
-        if(dr::any(d < 0))
-            return 0.f;
+        active &= dr::all(d >= 0);
         
         Float t1 = (-b + dr::sqrt(d)) / (2 * a);
         Float t2 = (-b - dr::sqrt(d)) / (2 * a);
         
-        if(dr::any(dr::all(0 <= t1 && t1 <= 1) || dr::all(0 <= t2 && t2 <= 1)))
-            return 1.f;
+        active &= dr::any(dr::all(0 <= t1 && t1 <= 1) || dr::all(0 <= t2 && t2 <= 1));
 
-        return 0.f;
+        return dr::select(active, 1.f, 0.f);
     }
 
     /**
