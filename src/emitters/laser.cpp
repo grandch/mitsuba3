@@ -10,21 +10,21 @@ public:
     MI_IMPORT_BASE(Emitter, m_flags)
     MI_IMPORT_TYPES(Scene, Texture)
 
-    Laser(const Properties &props) : Base(props) {    
+    Laser(const Properties &props) : Base(props) {
         m_position = props.get<ScalarPoint3f>("position");
         m_radiance = props.texture_d65<Texture>("radiance", 1.f);
         m_radius = props.get<float>("radius");
         m_direction = dr::normalize(props.get<ScalarVector3f>("direction"));
-        m_flags = EmitterFlags::DeltaPosition | EmitterFlags::DeltaDirection;
+        m_flags = EmitterFlags::DeltaPosition | EmitterFlags::DeltaDirection | EmitterFlags::Infinite;
         dr::set_attr(this, "flags", m_flags);
     }
 
     void traverse(TraversalCallback *callback) override {
         Base::traverse(callback);
-        callback->put_object("radiance", m_radiance.get(), +ParamFlags::Differentiable);
-        callback->put_parameter("radius", m_radius, +ParamFlags::Differentiable);
-        callback->put_parameter("position", (Point3f &) m_position.value(), +ParamFlags::Differentiable);
-        callback->put_parameter("direction", (ScalarVector3f &) m_direction.value(), +ParamFlags::Differentiable);
+        callback->put_object("radiance", m_radiance.get(), +ParamFlags::NonDifferentiable);
+        callback->put_parameter("radius", m_radius, +ParamFlags::NonDifferentiable);
+        callback->put_parameter("position", (Point3f &) m_position.value(), +ParamFlags::NonDifferentiable);
+        callback->put_parameter("direction", (ScalarVector3f &) m_direction.value(), +ParamFlags::NonDifferentiable);
     }
 
     /*
@@ -34,7 +34,7 @@ public:
     std::pair<Ray3f, Spectrum> sample_ray(Float /*time*/, Float /*wavelength_sample*/,
                                           const Point2f &/*sample2*/,
                                           const Point2f & /*sample3*/,
-                                          Mask active) const override {  
+                                          Mask active) const override {
         MI_MASKED_FUNCTION(ProfilerPhase::EndpointSampleRay, active);                                
         return { Ray3f(0,0), Spectrum(0) };
     }
@@ -68,7 +68,7 @@ public:
         ds.d      = -m_direction.value();
         ds.dist   = dr::norm(ds.p - it.p);
         
-        active &= dr::all(d >= 0);
+        active &= d >= 0;
         
         Float t1 = (-b + dr::sqrt(d)) / (2 * a);
         Float t2 = (-b - dr::sqrt(d)) / (2 * a);
@@ -76,7 +76,7 @@ public:
         SurfaceInteraction3f si = dr::zeros<SurfaceInteraction3f>();
         si.wavelengths = it.wavelengths;
         
-        active &= dr::all(0 <= t1 || 0 <= t2);
+        active &=0 <= t1 || 0 <= t2;
         ds.pdf = dr::select(active, 1.f, 0.f);
         
         return {ds, depolarizer<Spectrum>(m_radiance->eval(si, active))};
@@ -91,12 +91,12 @@ public:
         Float c = dr::dot(it.p - m_position.value(), it.p - m_position.value()) - m_radius * m_radius;
         Float d = b*b - 4*a*c;
         
-        active &= dr::all(d >= 0);
+        active &= d >= 0;
         
         Float t1 = (-b + dr::sqrt(d)) / (2 * a);
         Float t2 = (-b - dr::sqrt(d)) / (2 * a);
         
-        active &= dr::any(dr::all(0 <= t1 && t1 <= 1) || dr::all(0 <= t2 && t2 <= 1));
+        active &= (0 <= t1 && t1 <= 1) || (0 <= t2 && t2 <= 1);
 
         return dr::select(active, 1.f, 0.f);
     }
