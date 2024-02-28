@@ -65,7 +65,7 @@ public:
         ds.time   = it.time;
         ds.delta  = true;
         ds.emitter = this;
-        ds.d      = -m_direction.value();
+        ds.d      = m_direction.value();
         ds.dist   = dr::norm(ds.p - it.p);
         
         active &= d >= 0;
