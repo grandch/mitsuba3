@@ -1,10 +1,28 @@
+/*
+    This file is part of Mitsuba, a physically based rendering system.
+
+    Copyright (c) 2007-2014 by Wenzel Jakob and others.
+
+    Mitsuba is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License Version 3
+    as published by the Free Software Foundation.
+
+    Mitsuba is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program. If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #pragma once
 
+#include <drjit/vcall.h>
 #include <mitsuba/core/object.h>
 #include <mitsuba/core/spectrum.h>
 #include <mitsuba/core/traits.h>
 #include <mitsuba/render/fwd.h>
-#include <drjit/vcall.h>
 
 NAMESPACE_BEGIN(mitsuba)
 
@@ -15,15 +33,28 @@ NAMESPACE_BEGIN(mitsuba)
 template <typename Float, typename Spectrum>
 class MI_EXPORT_LIB Subsurface : public Object {
 public:
-    MI_IMPORT_TYPES(Sampler, Scene);
+    MI_IMPORT_TYPES(Sampler, Scene, Shape);
 
     /// Get the exitant radiance for a point on the surface
     virtual Spectrum Lo(const Scene *scene, Sampler *sampler,
                         const SurfaceInteraction3f &si, const Vector3f &d,
                         int depth = 0) const = 0;
 
-    /// Return a human-readable representation of the Subsurface
+    /// Return the list of shapes associated with this subsurface integrator
+    inline const std::vector<Shape *> shapes() const { return m_shapes; }
+
+    // Return a human-readable representation of the Subsurface
     std::string to_string() const override = 0;
+
+    /**
+     * \brief Possibly perform a pre-process task.
+     *
+     * The last three parameters are resource IDs of the associated scene,
+     * camera and sample generator, which have been made available to all
+     * local and remote workers.
+     */
+    virtual bool preprocess(const Scene *scene, int sceneResID, int cameraResID,
+                            int samplerResID) = 0;
 
     DRJIT_VCALL_REGISTER(Float, mitsuba::Subsurface)
 
@@ -32,11 +63,18 @@ protected:
     Subsurface();
     Subsurface(const Properties &props);
     virtual ~Subsurface();
+    virtual std::string to_string()= 0;
 
 protected:
+    std::vector<Shape *> m_shapes;
     // TODO: check what should go here
     // std::vector<Shape *> m_shapes;
 };
 
+
 MI_EXTERN_CLASS(Subsurface)
 NAMESPACE_END(mitsuba)
+
+DRJIT_VCALL_TEMPLATE_BEGIN(mitsuba::Subsurface)
+    DRJIT_VCALL_METHOD(Lo)
+DRJIT_VCALL_TEMPLATE_END(mitsuba::Subsurface)

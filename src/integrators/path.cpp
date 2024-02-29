@@ -1,3 +1,4 @@
+#include "drjit/array_router.h"
 #include <tuple>
 #include <mitsuba/core/ray.h>
 #include <mitsuba/core/properties.h>
@@ -88,7 +89,7 @@ template <typename Float, typename Spectrum>
 class PathIntegrator : public MonteCarloIntegrator<Float, Spectrum> {
 public:
     MI_IMPORT_BASE(MonteCarloIntegrator, m_max_depth, m_rr_depth, m_hide_emitters)
-    MI_IMPORT_TYPES(Scene, Sampler, Medium, Emitter, EmitterPtr, BSDF, BSDFPtr)
+    MI_IMPORT_TYPES(Scene, Sampler, Medium, Emitter, EmitterPtr, BSDF, BSDFPtr, SubsurfacePtr)
 
     PathIntegrator(const Properties &props) : Base(props) { }
 
@@ -148,9 +149,6 @@ public:
                                      /* ray_flags = */ +RayFlags::All,
                                      /* coherent = */ dr::eq(depth, 0u));
 
-            if (si.hasSubsurface()){}
-                // TODO
-                // result += throughput * si.LoSub(scene, sampler, -ray.d, depth);
 
             // ---------------------- Direct emission ----------------------
 
@@ -251,6 +249,12 @@ public:
                 Vector3f wo_2 = si.to_local(ray.d);
                 auto [bsdf_val_2, bsdf_pdf_2] = bsdf->eval_pdf(bsdf_ctx, si, wo_2, active);
                 bsdf_weight[bsdf_pdf_2 > 0.f] = bsdf_val_2 / dr::detach(bsdf_pdf_2);
+            }
+
+            // ------ BSSRDF Sampling ------
+            if (! dr::none_or<false>(si.hasSubsurface())) {
+                SubsurfacePtr ss = si.subsurface();
+                // result += throughput * si.LoSub(scene, sampler, -ray.d, depth);
             }
 
             // ------ Update loop variables based on current interaction ------

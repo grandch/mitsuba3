@@ -276,8 +276,8 @@ struct SurfaceInteraction : Interaction<Float_, Spectrum_> {
     /// Does the surface mark a transition between two media?
     Mask is_medium_transition() const { return shape->is_medium_transition(); }
 
-    // Does
-    bool hasSubsurface() const { return shape->hasSubsurface();}
+    // Does the surface has a subsurface
+    Mask hasSubsurface() const { return shape->hasSubsurface();}
 
     /**
      * \brief Determine the target medium
@@ -314,6 +314,17 @@ struct SurfaceInteraction : Interaction<Float_, Spectrum_> {
 
     // Returns the BSDF of the intersected shape
     BSDFPtr bsdf() const { return shape->bsdf(); }
+
+
+    /**
+     * \brief Returns the subsurface of the intersected shape.
+     *
+     * Implementation in 'subsurface.h'
+     */
+    SubsurfacePtr subsurface(const RayDifferential3f &ray);
+
+    // Returns the BSDF of the intersected shape
+    SubsurfacePtr subsurface() const { return shape->subsurface(); }
 
     /// Computes texture coordinate partials
     void compute_uv_partials(const RayDifferential3f &ray) {

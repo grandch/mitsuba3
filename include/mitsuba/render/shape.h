@@ -1117,7 +1117,7 @@ DRJIT_VCALL_TEMPLATE_BEGIN(mitsuba::Shape)
     auto is_sensor() const { return neq(sensor(), nullptr); }
     auto is_medium_transition() const { return neq(interior_medium(), nullptr) ||
                                                neq(exterior_medium(), nullptr); }
-    bool hasSubsurface() const { return neq(subsurface(), nullptr); }
+    auto hasSubsurface() const { return neq(subsurface(), nullptr); }
 DRJIT_VCALL_TEMPLATE_END(mitsuba::Shape)
 
 //! @}

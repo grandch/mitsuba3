@@ -33,9 +33,11 @@ template <typename Float, typename Spectrum> class Texture;
 template <typename Float, typename Spectrum> class Volume;
 template <typename Float, typename Spectrum> class VolumeGrid;
 template <typename Float, typename Spectrum> class MeshAttribute;
+template <typename Float, typename Spectrum> class Subsurface;
 
 template <typename Float, typename Spectrum> struct DirectionSample;
 template <typename Float, typename Spectrum> struct PositionSample;
+template <typename Float, typename Spectrum> struct IrradianceSample;
 template <typename Float, typename Spectrum> struct BSDFSample3;
 template <typename Float, typename Spectrum> struct SilhouetteSample;
 template <typename Float, typename Spectrum> struct PhaseFunctionContext;
@@ -43,6 +45,8 @@ template <typename Float, typename Spectrum> struct Interaction;
 template <typename Float, typename Spectrum> struct MediumInteraction;
 template <typename Float, typename Spectrum> struct SurfaceInteraction;
 template <typename Float, typename Shape>    struct PreliminaryIntersection;
+template <typename Float, typename Spectrum> class Subsurface3;
+template <typename Float, typename Spectrum> class IrradianceOctree;
 
 
 template <typename Float_, typename Spectrum_> struct RenderAliases {
@@ -64,6 +68,7 @@ template <typename Float_, typename Spectrum_> struct RenderAliases {
 
     using PositionSample3f          = PositionSample<Float, Spectrum>;
     using DirectionSample3f         = DirectionSample<Float, Spectrum>;
+    using IrradianceSample3f        = IrradianceSample<Float, Spectrum>;
     using BSDFSample3f              = BSDFSample3<Float, Spectrum>;
     using SilhouetteSample3f        = SilhouetteSample<Float, Spectrum>;
     using PhaseFunctionContext      = mitsuba::PhaseFunctionContext<Float, Spectrum>;
@@ -71,6 +76,7 @@ template <typename Float_, typename Spectrum_> struct RenderAliases {
     using MediumInteraction3f       = MediumInteraction<Float, Spectrum>;
     using SurfaceInteraction3f      = SurfaceInteraction<Float, Spectrum>;
     using PreliminaryIntersection3f = PreliminaryIntersection<Float, mitsuba::Shape<FloatU, SpectrumU>>;
+    using Subsurface3f              = Subsurface3<Float, Spectrum>;
 
     using Scene                  = mitsuba::Scene<FloatU, SpectrumU>;
     using Sampler                = mitsuba::Sampler<FloatU, SpectrumU>;
@@ -97,6 +103,8 @@ template <typename Float_, typename Spectrum_> struct RenderAliases {
     using Texture                = mitsuba::Texture<FloatU, SpectrumU>;
     using Volume                 = mitsuba::Volume<FloatU, SpectrumU>;
     using VolumeGrid             = mitsuba::VolumeGrid<FloatU, SpectrumU>;
+    using Subsurface             = mitsuba::Subsurface<FloatU, SpectrumU>;
+    using IrradianceOctree       = mitsuba::IrradianceOctree<FloatU, SpectrumU>;
 
     using MeshAttribute          = mitsuba::MeshAttribute<FloatU, SpectrumU>;
 
@@ -107,6 +115,7 @@ template <typename Float_, typename Spectrum_> struct RenderAliases {
     using ShapePtr               = dr::replace_scalar_t<Float, const Shape *>;
     using SensorPtr              = dr::replace_scalar_t<Float, const Sensor *>;
     using EmitterPtr             = dr::replace_scalar_t<Float, const Emitter *>;
+    using SubsurfacePtr          = dr::replace_scalar_t<Float, const Subsurface*>;
 };
 
 #define MMI_USING_MEMBERS_MACRO2(x) \
@@ -152,12 +161,14 @@ template <typename Float_, typename Spectrum_> struct RenderAliases {
     MI_IMPORT_RENDER_BASIC_TYPES()                                                                 \
     using PositionSample3f          = typename RenderAliases::PositionSample3f;                    \
     using DirectionSample3f         = typename RenderAliases::DirectionSample3f;                   \
+    using IrradianceSample3f        = typename RenderAliases::IrradianceSample3f;                   \
     using Interaction3f             = typename RenderAliases::Interaction3f;                       \
     using SurfaceInteraction3f      = typename RenderAliases::SurfaceInteraction3f;                \
     using MediumInteraction3f       = typename RenderAliases::MediumInteraction3f;                 \
     using PreliminaryIntersection3f = typename RenderAliases::PreliminaryIntersection3f;           \
     using BSDFSample3f              = typename RenderAliases::BSDFSample3f;                        \
     using SilhouetteSample3f        = typename RenderAliases::SilhouetteSample3f;                  \
+    using Subsurface3f              = typename RenderAliases::Subsurface3f;                        \
     DRJIT_MAP(MI_IMPORT_TYPES_MACRO, __VA_ARGS__)
 
 #define MI_IMPORT_OBJECT_TYPES()                                                                   \
@@ -189,6 +200,7 @@ template <typename Float_, typename Spectrum_> struct RenderAliases {
     using MediumPtr              = typename RenderAliases::MediumPtr;                              \
     using ShapePtr               = typename RenderAliases::ShapePtr;                               \
     using EmitterPtr             = typename RenderAliases::EmitterPtr;                             \
-    using SensorPtr              = typename RenderAliases::SensorPtr;
+    using SensorPtr              = typename RenderAliases::SensorPtr;                              \
+    using SubsurfacePtr          = typename RenderAliases::SubsurfacePtr;
 
 NAMESPACE_END(mitsuba)
