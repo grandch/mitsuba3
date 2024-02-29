@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <drjit/vcall.h>
 #include <mitsuba/core/object.h>
 #include <mitsuba/core/spectrum.h>
@@ -38,7 +39,7 @@ public:
     /// Get the exitant radiance for a point on the surface
     virtual Spectrum Lo(const Scene *scene, Sampler *sampler,
                         const SurfaceInteraction3f &si, const Vector3f &d,
-                        int depth = 0) const = 0;
+                        const UInt32 depth = 0) const = 0;
 
     /// Return the list of shapes associated with this subsurface integrator
     inline const std::vector<Shape *> shapes() const { return m_shapes; }
