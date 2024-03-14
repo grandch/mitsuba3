@@ -39,7 +39,7 @@ NAMESPACE_BEGIN(mitsuba)
 template <typename Float, typename Spectrum>
 class MI_EXPORT_LIB IrradianceOctree : public Object {
 public:
-    MI_IMPORT_TYPES(IrradianceSample)
+    MI_IMPORT_TYPES()
 
     using BoundingBox = BoundingBox<Point<dr::scalar_t<Float>, 3>>;
     using Point       = typename BoundingBox::Point;
@@ -48,7 +48,7 @@ public:
     using SizedInt    = dr::uint_array_t<Scalar>;
     struct OctreeNode {
         bool leaf : 1;
-        IrradianceSample data;
+        IrradianceSample3f data;
 
         union {
             struct {
@@ -81,7 +81,7 @@ public:
      * By default, the maximum tree depth is set to 16
      */
     inline IrradianceOctree(const BoundingBox &aabb, Float solidAngleThreshold,
-                            std::vector<IrradianceSample> &records,
+                            std::vector<IrradianceSample3f> &records,
                             uint32_t maxDepth = 24, uint32_t maxItems = 8)
         : m_aabb(aabb), m_maxDepth(maxDepth), m_maxItems(maxItems),
           m_solidAngleThreshold(solidAngleThreshold), m_root(nullptr) {
@@ -121,7 +121,7 @@ public:
     /// Query the octree using a customizable functor, while representatives for
     /// distant nodes
     template <typename QueryType>
-    inline void performQuery(QueryType &query) const {
+    inline void perform_query(QueryType &query) const {
         perform_query(m_aabb, m_root, query);
     }
 
@@ -166,7 +166,7 @@ protected:
 
         /* Label all items */
         for (uint32_t *it = start; it != end; ++it) {
-            IrradianceSample &item = m_items[*it];
+            IrradianceSample3f &item = m_items[*it];
             const Point &p         = item.getPosition();
 
             uint8_t label = 0;
@@ -214,7 +214,7 @@ protected:
 
     /// Propagate irradiance approximations througout the tree
     void propagate(OctreeNode *node) {
-        IrradianceSample &repr = node->data;
+        IrradianceSample3f &repr = node->data;
 
         /* Initialize the cluster values */
         repr.E          = Spectrum(0.0f);
@@ -225,7 +225,7 @@ protected:
         if (node->leaf) {
             /* Inner node */
             for (uint32_t i = 0; i < node->count; ++i) {
-                const IrradianceSample &sample = m_items[i + node->offset];
+                const IrradianceSample3f &sample = m_items[i + node->offset];
                 repr.E += sample.E * sample.area;
                 repr.area += sample.area;
                 Float weight = sample.E.getLuminance() * sample.area;
@@ -287,7 +287,7 @@ protected:
 
 private:
     BoundingBox m_aabb;
-    std::vector<IrradianceSample> m_items;
+    std::vector<IrradianceSample3f> m_items;
     uint32_t m_maxDepth;
     uint32_t m_maxItems;
     OctreeNode *m_root;

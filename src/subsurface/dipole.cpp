@@ -16,17 +16,21 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
+#include "mitsuba/render/integrator.h"
+#include <mitsuba/core/timer.h>
+#include <mitsuba/render/bluenoise.h>
 #include <mitsuba/render/fresnel.h>
 #include <mitsuba/render/ior.h>
-#include <mitsuba/render/fwd.h>
+#include <mitsuba/render/irrtree.h>
 #include <mitsuba/render/subsurface.h>
+#include <mitsuba/render/texture.h>
+#include <vector>
 
 NAMESPACE_BEGIN(mitsuba)
 
 template <typename Float, typename Spectrum> class IsotropicDipoleQuery {
 public:
-    MI_IMPORT_TYPES(Point3f, IrradianceSample3f)
+    MI_IMPORT_TYPES(Texture)
     inline IsotropicDipoleQuery(const Spectrum &zr, const Spectrum &zv,
                                 const Spectrum &sigmaTr, const Point3f &p)
         : zr(zr), zv(zv), sigmaTr(sigmaTr), result(0.0f), p(p) {}
@@ -59,11 +63,12 @@ public:
 };
 
 template <typename Float, typename Spectrum>
-class IsotropicDipole : public Subsurface<Float, Spectrum> {
+class IsotropicDipole final : public Subsurface<Float, Spectrum> {
 
 public:
     MI_IMPORT_BASE(Subsurface, m_shapes)
-    MI_IMPORT_TYPES(Texture, Scene, Sensor, Sampler, IrradianceOctree)
+    MI_IMPORT_TYPES(Texture, Scene, Sensor, Sampler, Integrator,
+                    IrradianceOctree)
 
     IsotropicDipole(const Properties &props) : Base(props) {
         /* How many samples should be taken when estimating
@@ -96,125 +101,126 @@ public:
         m_sigma_t = props.texture<Texture>("sigma_t", 1.0);
         m_albedo  = props.texture<Texture>("albedo", 1.0);
         m_g       = props.texture<Texture>("g", 1.0);
-
-        // m_sigma_s = m_albedo * m_sigma_t;
-        // m_sigma_a = m_sigma_t - m_sigma_s;
-
-        // m_sigma_s_prime = m_sigma_s * (new <Texture>(1.0f) - m_g);
-        // m_sigma_t_prime = m_sigma_s_prime + m_sigma_a;
-
-        // /* Find the smallest mean-free path over all wavelengths */
-        // Spectrum mfp = Spectrum(1.0f) / m_sigma_t_prime;
-        // m_radius     = std::numeric_limits<Float>::max();
-        // for (auto lambda : mfp)
-        //     m_radius = std::min(m_radius, mfp[lambda]);
-
-        // /* Average diffuse reflectance due to mismatched indices of refraction
-        //  */
-        // m_Fdr = fresnel_diffuse_reflectance(1 / m_eta);
-
-        // /* Dipole boundary condition distance term */
-        // Float A = (1 + m_Fdr) / (1 - m_Fdr);
-
-        // /* Effective transport extinction coefficient */
-        // m_sigma_tr = (m_sigma_a * m_sigma_t_prime * 3.0f).sqrt();
-
-        // /* Distance of the two dipole point sources to the surface */
-        // m_zr = mfp;
-        // m_zv = mfp * (1.0f + 4.0f / 3.0f * A);
     }
 
-    Spectrum Lo(const Scene *scene, Sampler *sampler,
-                const SurfaceInteraction3f &si, const Vector3f &d,
-                int depth = 0) {
-        if (dr::dot(si.sh_frame.n, d) < 0)
-            return 0.f;
+    bool preprocess(const Scene *scene) override {
+        if (m_octree)
+            return true;
 
-        // IsotropicDipoleQuery<Float, Spectrum> query(m_zr, m_zv, m_sigma_tr, si.p);
-        // m_octree->perform_query(query);
-        // Spectrum result(query.getResult() * dr::InvPi<Float>);
+        ref<Timer> timer = new Timer();
 
-        // if (m_eta != 1.f)
-        //     result *= 1.f - fresnel_conductor(dr::dot(si.sh_frame.n, d), m_eta);
+        BoundingBox3f aabb;
+        Float sa;
 
-        // return result;
-    };
+        std::vector<PositionSample3f> points;
+        /* It is necessary to increase the sampling resolution to
+           prevent low-frequency noise in the output */
+        Float actualRadius = m_radius / dr::sqrt(m_sample_multiplier * 20);
 
-    bool preprocess(const Scene *scene, int sceneResID, int cameraResID,
-                    int _samplerResID) {
-        // if (m_octree)
-        //     return true;
+        BlueNoiseSampler<Float, Spectrum> bns{};
 
-        // ref<Timer> timer = new Timer();
-
-        // BoundingBox3f aabb;
-        // Float sa;
-
-        // std::vector<PositionSample3f> points;
-        // /* It is necessary to increase the sampling resolution to
-        //    prevent low-frequency noise in the output */
-        // Float actualRadius = m_radius / std::sqrt(m_sample_multiplier * 20);
-
-        // BlueNoiseSampler<Float, Spectrum> bns{};
-
-        // bns.blueNoisePointSet(scene, m_shapes, 0, actualRadius, &points, sa, aabb);
+        bns.blueNoisePointSet(scene, m_shapes, 0, actualRadius, &points, sa,
+                              aabb);
 
         /* 2. Gather irradiance in parallel */
-        // const ref<Sensor> sensor                = scene->sensors()[0];
-        // ref<IrradianceSamplingProcess> proc = new IrradianceSamplingProcess(
-        //     points, 1024, m_irrSamples, m_irrIndirect,
-        //     sensor->getShutterOpen() + 0.5f * sensor->getShutterOpenTime(),
-        //     job);
+        ref<Sensor> sensor = scene->sensors()[0];
 
-        // /* Create a sampler instance for every core */
-        // ref<Sampler> sampler =
-        //     static_cast<Sampler *>(PluginManager::getInstance()->createObject(
-        //         MTS_CLASS(Sampler), Properties("independent")));
-        // std::vector<SerializableObject *> samplers(sched->getCoreCount());
-        // for (size_t i = 0; i < sched->getCoreCount(); ++i) {
-        //     ref<Sampler> clonedSampler = sampler->clone();
-        //     clonedSampler->incRef();
-        //     samplers[i] = clonedSampler.get();
-        // }
+        Float time =
+            sensor->shutter_open() + 0.5f * sensor->shutter_open_time();
 
-        // int samplerResID    = sched->registerMultiResource(samplers);
-        // int integratorResID = sched->registerResource(
-        //     const_cast<Integrator *>(scene->getIntegrator()));
+        std::vector<IrradianceSample3f> samples;
+        samples.reserve(points.size());
 
-        // proc->bindResource("scene", sceneResID);
-        // proc->bindResource("integrator", integratorResID);
-        // proc->bindResource("sampler", samplerResID);
-        // scene->bindUsedResources(proc);
-        // m_proc = proc;
-        // sched->schedule(proc);
-        // sched->wait(proc);
-        // m_proc = NULL;
-        // for (size_t i = 0; i < samplers.size(); ++i)
-        //     samplers[i]->decRef();
+        const SamplingIntegrator<Float, Spectrum> *integrator =
+            dynamic_cast<const SamplingIntegrator<Float, Spectrum> *>(
+                scene->integrator());
 
-        // sched->unregisterResource(samplerResID);
-        // sched->unregisterResource(integratorResID);
-        // if (proc->getReturnStatus() != ParallelProcess::ESuccess)
-        //     return false;
+        ref<Sampler> sampler = sensor->sampler()->clone();
 
-        // Log(EDebug, "Done gathering (took %i ms), clustering ..",
-        //     timer->getMilliseconds());
-        // timer->reset();
+        for (size_t i = 0; i < points.size(); ++i) {
+            /* Create a fake intersection record */
+            const PositionSample ps = points[i];
 
-        // std::vector<IrradianceSample> &samples =
-        //     proc->getIrradianceSampleVector()->get();
-        // sa /= samples.size();
+            SurfaceInteraction3f si(ps, Wavelength());
+            si.p        = ps.p;
+            si.sh_frame = Frame3f(ps.n);
+            // si.shape = scene->shapes()[sample.shapeIndex].get();
+            si.time   = time;
+            si.duv_dx = 0;
+            si.duv_dy = 0;
+            // LINE of sanity
 
-        // for (size_t i = 0; i < samples.size(); ++i)
-        //     samples[i].area = sa;
+            Spectrum E = 0.0;
+            for (int i = 0; i < m_irr_samples; ++i) {
+                auto [direct, weight, emitter] = scene->sample_emitter_ray(
+                    time, sampler->next_1d(true), sampler->next_2d(true),
+                    sampler->next_2d(true));
 
-        // m_octree = new IrradianceOctree(aabb, m_quality, samples);
+                E += integrator->sample(scene, sampler, direct);
+                if (m_irr_indirect) {
+                    // unimplemente for now
+                    //     RayDifferential3f indirect{ si.p, d, si.time };
+                    //     integrator->sample(scene, sampler, indirect);
+                }
+            }
+            E /= m_irr_samples;
+            samples.push_back(IrradianceSample3f(si.p, E, {}));
+        }
 
-        // Log(EDebug, "Done clustering (took %i ms).", timer->getMilliseconds());
-        // m_octreeResID = Scheduler::getInstance()->registerResource(m_octree);
+        sa /= samples.size();
 
-        // return true;
+        for (size_t i = 0; i < samples.size(); ++i)
+            samples[i].area = sa;
+
+        m_octree = new IrradianceOctree(aabb, m_quality, samples);
+
+        return true;
     }
+
+    Spectrum Lo(const Scene * /*scene*/, Sampler * /*sampler*/,
+                const SurfaceInteraction3f &si, const Vector3f &d,
+                UInt32 /*depth*/) const override {
+
+       if (dr::any(dr::dot(si.sh_frame.n, d) < 0))
+            return 0.f;
+
+        Spectrum sigma_s       = m_albedo->eval(si) * m_sigma_t->eval(si);
+        Spectrum sigma_a       = m_sigma_t->eval(si) - sigma_s;
+        Spectrum sigma_s_prime = sigma_s * (1.0f - m_albedo->eval(si));
+        Spectrum sigma_t_prime = sigma_s_prime + sigma_a;
+
+        /* Find the smallest mean-free path over all wavelengths */
+        Spectrum mfp = Spectrum(1.0f) / sigma_t_prime;
+        Float radius = std::numeric_limits<Float>::max();
+        for (Float lambda : mfp)
+            radius = dr::minimum(radius, lambda);
+
+        /* Average diffuse reflectance due to mismatched indices of refraction
+         */
+        Float fdr = fresnel_diffuse_reflectance(1 / m_eta);
+
+        /* Dipole boundary condition distance term */
+        Float A = (1 + fdr) / (1 - fdr);
+
+        /* Effective transport extinction coefficient */
+        Spectrum sigma_tr = dr::sqrt(sigma_a * sigma_t_prime * 3.0f);
+
+        /* Distance of the two dipole point sources to the surface */
+        Spectrum zr = mfp;
+        Spectrum zv = mfp * (1.0f + 4.0f / 3.0f * A);
+
+        IsotropicDipoleQuery<Float, Spectrum> query(zr, zv, sigma_tr, si.p);
+        m_octree->perform_query(query);
+        Spectrum result(query.getResult() * dr::InvPi<Float>);
+
+        if (m_eta != 1.f) {
+            dr::Complex<Float> eta_c(m_eta, 0);
+            result *=
+                (1.f - fresnel_conductor(dr::dot(si.sh_frame.n, d), eta_c));
+        }
+
+        return result;
+    };
 
     std::string to_string() const override {
         std::ostringstream oss;
@@ -233,15 +239,10 @@ public:
     MI_DECLARE_CLASS()
 
 private:
-    ref<Texture> m_sigma_t, m_albedo;
+    ref<Texture> m_sigma_t, m_albedo, m_g;
     Float m_eta;
 
-    ref<Texture> m_sigma_a, m_sigma_s, m_g;
-    ref<Texture> m_sigma_tr, m_zr, m_zv;
-    ref<Texture> m_sigma_s_prime, m_sigma_t_prime;
-    Float m_Fdr;
-
-    // ref<IrradianceOctree<Float, Spectrum>> m_octree;
+    ref<IrradianceOctree> m_octree;
     int m_octreeResID, m_octreeIndex;
     int m_irr_samples;
     bool m_irr_indirect;

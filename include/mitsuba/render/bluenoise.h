@@ -36,8 +36,6 @@ class MI_EXPORT_LIB BlueNoiseSampler {
 public:
     MI_IMPORT_TYPES(Scene, Shape, Sampler)
 
-    using BoundingBox = BoundingBox<Point<dr::scalar_t<Float>, 3>>;
-
     /**
      * \brief Generate a point set with blue noise properties
      *
@@ -65,14 +63,14 @@ public:
     void blueNoisePointSet(const Scene *scene,
                            const std::vector<Shape *> &shapes, uint32_t seed,
                            Float radius, std::vector<PositionSample3f> *target,
-                           Float &sa, BoundingBox &aabb) {
+                           Float &sa, BoundingBox3f &aabb) {
         int kmax = 8; /* Perform 8 trial runs */
 
         uint32_t n_threads = (uint32_t) Thread::thread_count();
 
         /* Create a random number generator for each thread */
         ref<Sampler> rootSampler = new Sampler();
-        std::vector<BoundingBox> t_aabb(n_threads);
+        std::vector<BoundingBox3f> t_aabb(n_threads);
         for (int i = 0; i < n_threads; ++i) {
             t_aabb[i].reset();
         }

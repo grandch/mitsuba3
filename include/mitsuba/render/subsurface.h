@@ -18,12 +18,13 @@
 
 #pragma once
 
-#include <cstdint>
 #include <drjit/vcall.h>
 #include <mitsuba/core/object.h>
 #include <mitsuba/core/spectrum.h>
 #include <mitsuba/core/traits.h>
 #include <mitsuba/render/fwd.h>
+#include <mitsuba/render/interaction.h>
+
 
 NAMESPACE_BEGIN(mitsuba)
 
@@ -44,9 +45,6 @@ public:
     /// Return the list of shapes associated with this subsurface integrator
     inline const std::vector<Shape *> shapes() const { return m_shapes; }
 
-    // Return a human-readable representation of the Subsurface
-    std::string to_string() const override = 0;
-
     /**
      * \brief Possibly perform a pre-process task.
      *
@@ -54,8 +52,7 @@ public:
      * camera and sample generator, which have been made available to all
      * local and remote workers.
      */
-    virtual bool preprocess(const Scene *scene, int sceneResID, int cameraResID,
-                            int samplerResID) = 0;
+    virtual bool preprocess(const Scene *scene) = 0;
 
     DRJIT_VCALL_REGISTER(Float, mitsuba::Subsurface)
 
@@ -64,12 +61,9 @@ protected:
     Subsurface();
     Subsurface(const Properties &props);
     virtual ~Subsurface();
-    virtual std::string to_string()= 0;
 
 protected:
     std::vector<Shape *> m_shapes;
-    // TODO: check what should go here
-    // std::vector<Shape *> m_shapes;
 };
 
 
