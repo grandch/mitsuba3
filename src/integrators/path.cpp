@@ -1,10 +1,11 @@
-#include <tuple>
-#include <mitsuba/core/ray.h>
+#include "drjit/array_router.h"
 #include <mitsuba/core/properties.h>
+#include <mitsuba/core/ray.h>
 #include <mitsuba/render/bsdf.h>
 #include <mitsuba/render/emitter.h>
 #include <mitsuba/render/integrator.h>
 #include <mitsuba/render/records.h>
+#include <tuple>
 
 NAMESPACE_BEGIN(mitsuba)
 
@@ -42,13 +43,13 @@ To use the path tracer appropriately, it is instructive to know roughly how
 it works: its main operation is to trace many light paths using *random walks*
 starting from the sensor. A single random walk is shown below, which entails
 casting a ray associated with a pixel in the output image and searching for
-the first visible intersection. A new direction is then chosen at the intersection,
-and the ray-casting step repeats over and over again (until one of several
-stopping criteria applies).
+the first visible intersection. A new direction is then chosen at the
+intersection, and the ray-casting step repeats over and over again (until one of
+several stopping criteria applies).
 
-.. image:: ../../resources/data/docs/images/integrator/integrator_path_figure.png
-    :width: 95%
-    :align: center
+.. image::
+../../resources/data/docs/images/integrator/integrator_path_figure.png :width:
+95% :align: center
 
 At every intersection, the path tracer tries to create a connection to
 the light source in an attempt to find a *complete* path along which
@@ -87,13 +88,14 @@ paths of arbitrary length to compute both direct and indirect illumination.
 template <typename Float, typename Spectrum>
 class PathIntegrator : public MonteCarloIntegrator<Float, Spectrum> {
 public:
-    MI_IMPORT_BASE(MonteCarloIntegrator, m_max_depth, m_rr_depth, m_hide_emitters)
-    MI_IMPORT_TYPES(Scene, Sampler, Medium, Emitter, EmitterPtr, BSDF, BSDFPtr)
+    MI_IMPORT_BASE(MonteCarloIntegrator, m_max_depth, m_rr_depth,
+                   m_hide_emitters)
+    MI_IMPORT_TYPES(Scene, Sampler, Medium, Emitter, EmitterPtr, BSDF, BSDFPtr,
+                    SubsurfacePtr)
 
-    PathIntegrator(const Properties &props) : Base(props) { }
+    PathIntegrator(const Properties &props) : Base(props) {}
 
-    std::pair<Spectrum, Bool> sample(const Scene *scene,
-                                     Sampler *sampler,
+    std::pair<Spectrum, Bool> sample(const Scene *scene, Sampler *sampler,
                                      const RayDifferential3f &ray_,
                                      const Medium * /* medium */,
                                      Float * /* aovs */,
@@ -105,20 +107,21 @@ public:
 
         // --------------------- Configure loop state ----------------------
 
-        Ray3f ray                     = Ray3f(ray_);
-        Spectrum throughput           = 1.f;
-        Spectrum result               = 0.f;
-        Float eta                     = 1.f;
-        UInt32 depth                  = 0;
+        Ray3f ray           = Ray3f(ray_);
+        Spectrum throughput = 1.f;
+        Spectrum result     = 0.f;
+        Float eta           = 1.f;
+        UInt32 depth        = 0;
 
         // If m_hide_emitters == false, the environment emitter will be visible
-        Mask valid_ray                = !m_hide_emitters && dr::neq(scene->environment(), nullptr);
+        Mask valid_ray =
+            !m_hide_emitters && dr::neq(scene->environment(), nullptr);
 
         // Variables caching information from the previous bounce
-        Interaction3f prev_si         = dr::zeros<Interaction3f>();
-        Float         prev_bsdf_pdf   = 1.f;
-        Bool          prev_bsdf_delta = true;
-        BSDFContext   bsdf_ctx;
+        Interaction3f prev_si = dr::zeros<Interaction3f>();
+        Float prev_bsdf_pdf   = 1.f;
+        Bool prev_bsdf_delta  = true;
+        BSDFContext bsdf_ctx;
 
         /* Set up a Dr.Jit loop. This optimizes away to a normal loop in scalar
            mode, and it generates either a a megakernel (default) or
@@ -167,10 +170,10 @@ public:
                 Float mis_bsdf = mis_weight(prev_bsdf_pdf, em_pdf);
 
                 // Accumulate, being careful with polarization (see spec_fma)
-                result = spec_fma(
-                    throughput,
-                    ds.emitter->eval(si, prev_bsdf_pdf > 0.f) * mis_bsdf,
-                    result);
+                result = spec_fma(throughput,
+                                  ds.emitter->eval(si, prev_bsdf_pdf > 0.f) *
+                                      mis_bsdf,
+                                  result);
             }
 
             // Continue tracing the path at this point?
@@ -184,11 +187,12 @@ public:
             // ---------------------- Emitter sampling ----------------------
 
             // Perform emitter sampling?
-            Mask active_em = active_next && has_flag(bsdf->flags(), BSDFFlags::Smooth);
+            Mask active_em =
+                active_next && has_flag(bsdf->flags(), BSDFFlags::Smooth);
 
             DirectionSample3f ds = dr::zeros<DirectionSample3f>();
-            Spectrum em_weight = dr::zeros<Spectrum>();
-            Vector3f wo = dr::zeros<Vector3f>();
+            Spectrum em_weight   = dr::zeros<Spectrum>();
+            Vector3f wo          = dr::zeros<Vector3f>();
 
             if (dr::any_or<true>(active_em)) {
                 // Sample the emitter
@@ -200,8 +204,10 @@ public:
                    with AD to enable light source optimization. */
                 if (dr::grad_enabled(si.p)) {
                     ds.d = dr::normalize(ds.p - si.p);
-                    Spectrum em_val = scene->eval_emitter_direction(si, ds, active_em);
-                    em_weight = dr::select(dr::neq(ds.pdf, 0), em_val / ds.pdf, 0);
+                    Spectrum em_val =
+                        scene->eval_emitter_direction(si, ds, active_em);
+                    em_weight =
+                        dr::select(dr::neq(ds.pdf, 0), em_val / ds.pdf, 0);
                 }
 
                 wo = si.to_local(ds.d);
@@ -209,11 +215,11 @@ public:
 
             // ------ Evaluate BSDF * cos(theta) and sample direction -------
 
-            Float sample_1 = sampler->next_1d();
+            Float sample_1   = sampler->next_1d();
             Point2f sample_2 = sampler->next_2d();
 
-            auto [bsdf_val, bsdf_pdf, bsdf_sample, bsdf_weight]
-                = bsdf->eval_pdf_sample(bsdf_ctx, si, wo, sample_1, sample_2);
+            auto [bsdf_val, bsdf_pdf, bsdf_sample, bsdf_weight] =
+                bsdf->eval_pdf_sample(bsdf_ctx, si, wo, sample_1, sample_2);
 
             // --------------- Emitter sampling contribution ----------------
 
@@ -225,28 +231,41 @@ public:
                     dr::select(ds.delta, 1.f, mis_weight(ds.pdf, bsdf_pdf));
 
                 // Accumulate, being careful with polarization (see spec_fma)
-                result[active_em] = spec_fma(
-                    throughput, bsdf_val * em_weight * mis_em, result);
+                result[active_em] =
+                    spec_fma(throughput, bsdf_val * em_weight * mis_em, result);
+            }
+
+            // ------ BSSRDF Sampling ------
+            /* Include radiance from a subsurface scattering model if requested */
+            if (!dr::none_or<false>(si.hasSubsurface())) {
+                SubsurfacePtr ss = si.subsurface();
+                auto ss_val = ss->Lo(scene, sampler, si, -ray.d, depth);
+                // Accumulate, being careful with polarization (see spec_fma)
+                spec_fma(throughput, ss_val, result);
             }
 
             // ---------------------- BSDF sampling ----------------------
 
-            bsdf_weight = si.to_world_mueller(bsdf_weight, -bsdf_sample.wo, si.wi);
+            bsdf_weight =
+                si.to_world_mueller(bsdf_weight, -bsdf_sample.wo, si.wi);
 
             ray = si.spawn_ray(si.to_world(bsdf_sample.wo));
 
             /* When the path tracer is differentiated, we must be careful that
                the generated Monte Carlo samples are detached (i.e. don't track
-               derivatives) to avoid bias resulting from the combination of moving
-               samples and discontinuous visibility. We need to re-evaluate the
-               BSDF differentiably with the detached sample in that case. */
+               derivatives) to avoid bias resulting from the combination of
+               moving samples and discontinuous visibility. We need to
+               re-evaluate the BSDF differentiably with the detached sample in
+               that case. */
             if (dr::grad_enabled(ray)) {
                 ray = dr::detach<true>(ray);
 
                 // Recompute 'wo' to propagate derivatives to cosine term
                 Vector3f wo_2 = si.to_local(ray.d);
-                auto [bsdf_val_2, bsdf_pdf_2] = bsdf->eval_pdf(bsdf_ctx, si, wo_2, active);
-                bsdf_weight[bsdf_pdf_2 > 0.f] = bsdf_val_2 / dr::detach(bsdf_pdf_2);
+                auto [bsdf_val_2, bsdf_pdf_2] =
+                    bsdf->eval_pdf(bsdf_ctx, si, wo_2, active);
+                bsdf_weight[bsdf_pdf_2 > 0.f] =
+                    bsdf_val_2 / dr::detach(bsdf_pdf_2);
             }
 
             // ------ Update loop variables based on current interaction ------
@@ -257,9 +276,10 @@ public:
                          !has_flag(bsdf_sample.sampled_type, BSDFFlags::Null);
 
             // Information about the current vertex needed by the next iteration
-            prev_si = si;
+            prev_si       = si;
             prev_bsdf_pdf = bsdf_sample.pdf;
-            prev_bsdf_delta = has_flag(bsdf_sample.sampled_type, BSDFFlags::Delta);
+            prev_bsdf_delta =
+                has_flag(bsdf_sample.sampled_type, BSDFFlags::Delta);
 
             // -------------------- Stopping criterion ---------------------
 
@@ -267,8 +287,8 @@ public:
 
             Float throughput_max = dr::max(unpolarized_spectrum(throughput));
 
-            Float rr_prob = dr::minimum(throughput_max * dr::sqr(eta), .95f);
-            Mask rr_active = depth >= m_rr_depth,
+            Float rr_prob    = dr::minimum(throughput_max * dr::sqr(eta), .95f);
+            Mask rr_active   = depth >= m_rr_depth,
                  rr_continue = sampler->next_1d() < rr_prob;
 
             /* Differentiable variants of the renderer require the the russian
@@ -280,10 +300,8 @@ public:
                      dr::neq(throughput_max, 0.f);
         }
 
-        return {
-            /* spec  = */ dr::select(valid_ray, result, 0.f),
-            /* valid = */ valid_ray
-        };
+        return { /* spec  = */ dr::select(valid_ray, result, 0.f),
+                 /* valid = */ valid_ray };
     }
 
     //! @}
@@ -291,9 +309,10 @@ public:
 
     std::string to_string() const override {
         return tfm::format("PathIntegrator[\n"
-            "  max_depth = %u,\n"
-            "  rr_depth = %u\n"
-            "]", m_max_depth, m_rr_depth);
+                           "  max_depth = %u,\n"
+                           "  rr_depth = %u\n"
+                           "]",
+                           m_max_depth, m_rr_depth);
     }
 
     /// Compute a multiple importance sampling weight using the power heuristic

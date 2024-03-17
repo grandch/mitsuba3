@@ -37,6 +37,14 @@ Integrator<Float, Spectrum>::render(Scene *scene,
     if (sensor_index >= scene->sensors().size())
         Throw("Scene::render(): sensor index %i is out of bounds!", sensor_index);
 
+    auto sampler = scene->sensors()[0]->sampler()->clone();
+
+    for (auto& shape : scene->shapes()) {
+        if (shape->hasSubsurface()) {
+            shape->subsurface()->preprocess(scene, sampler);
+        }
+    }
+
     return render(scene, scene->sensors()[sensor_index].get(),
                   seed, spp, develop, evaluate);
 }

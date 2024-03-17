@@ -2,6 +2,7 @@
 
 #include <drjit/vcall.h>
 #include <mitsuba/render/records.h>
+#include <mitsuba/render/subsurface.h>
 #include <mitsuba/core/spectrum.h>
 #include <mitsuba/core/transform.h>
 #include <mitsuba/core/bbox.h>
@@ -228,6 +229,7 @@ public:
     using ScalarSize  = uint32_t;
     using Index = UInt32;
     using ScalarRay3f = Ray<ScalarPoint3f, Spectrum>;
+    using Subsurface = Subsurface<Float, Spectrum>;
 
     // =============================================================
     //! @{ \name Sampling routines
@@ -814,6 +816,15 @@ public:
     /// Return the area sensor associated with this shape (if any)
     Sensor *sensor(Mask /*unused*/ = true) { return m_sensor.get(); }
 
+    /// Does this shape have a sub-surface
+    bool hasSubsurface() const { return m_subsurface.get() != NULL; }
+
+    /// Return the subsurface associated with this shape (if any)
+    Subsurface *subsurface(Mask /*unused*/ = true) { return m_subsurface.get(); }
+
+    /// Return the subsurface associated with this shape (if any)
+    const Subsurface *subsurface(Mask /*unused*/ = true) const { return m_subsurface.get(); }
+
     /**
      * \brief Returns the number of sub-primitives that make up this shape
      *
@@ -959,6 +970,7 @@ protected:
     ref<Sensor> m_sensor;
     ref<Medium> m_interior_medium;
     ref<Medium> m_exterior_medium;
+    ref<Subsurface> m_subsurface;
     std::string m_id;
     ShapeType m_shape_type = ShapeType::Other;
 
@@ -1094,6 +1106,7 @@ DRJIT_VCALL_TEMPLATE_BEGIN(mitsuba::Shape)
     DRJIT_VCALL_METHOD(surface_area)
     DRJIT_VCALL_GETTER(emitter, const typename Class::Emitter *)
     DRJIT_VCALL_GETTER(sensor, const typename Class::Sensor *)
+    DRJIT_VCALL_GETTER(subsurface, const typename Class::Subsurface *)
     DRJIT_VCALL_GETTER(bsdf, const typename Class::BSDF *)
     DRJIT_VCALL_GETTER(interior_medium, const typename Class::Medium *)
     DRJIT_VCALL_GETTER(exterior_medium, const typename Class::Medium *)
@@ -1104,6 +1117,7 @@ DRJIT_VCALL_TEMPLATE_BEGIN(mitsuba::Shape)
     auto is_sensor() const { return neq(sensor(), nullptr); }
     auto is_medium_transition() const { return neq(interior_medium(), nullptr) ||
                                                neq(exterior_medium(), nullptr); }
+    auto hasSubsurface() const { return neq(subsurface(), nullptr); }
 DRJIT_VCALL_TEMPLATE_END(mitsuba::Shape)
 
 //! @}

@@ -28,3 +28,11 @@ __pycache__
 /docs/src/quickstart
 /docs/src/generated
 /docs/resources
+
+/out
+/.cache
+venv
+dist
+_skbuild
+mitsuba-3.5.0
+mitsuba.egg-info

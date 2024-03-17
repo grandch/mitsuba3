@@ -194,6 +194,95 @@ struct DirectionSample : public PositionSample<Float_, Spectrum_> {
     DRJIT_STRUCT(DirectionSample, p, n, uv, time, pdf, delta, d, dist, emitter)
 };
 
+template <typename Float_, typename Spectrum_>
+struct MiniPositionSample {
+public:
+    // =============================================================
+    //! @{ \name Type declarations
+    // =============================================================
+
+    using Float    = Float_;
+    using Spectrum = Spectrum_;
+    MI_IMPORT_RENDER_BASIC_TYPES()
+    //! @}
+    // =============================================================
+
+    // =============================================================
+    //! @{ \name Fields
+    // =============================================================
+
+    /// Sampled position
+    Point3f p;
+
+    /// Sampled surface normal (if applicable)
+    Normal3f n;
+
+    /// total surface area represented by this sample
+    int shapeIndex;
+
+    //! @}
+    // =============================================================
+
+    // =============================================================
+    //! @{ \name Constructors, methods, etc.
+    // =============================================================
+
+    /// Basic field constructor
+    MiniPositionSample(const Point3f &p, const Normal3f &n, int shapeIndex)
+        : p(p), n(n), shapeIndex(shapeIndex) { }
+
+    //! @}
+    // =============================================================
+
+    DRJIT_STRUCT(MiniPositionSample, p, shapeIndex)
+};
+
+
+template <typename Float_, typename Spectrum_>
+struct IrradianceSample {
+public:
+    // =============================================================
+    //! @{ \name Type declarations
+    // =============================================================
+
+    using Float    = Float_;
+    using Spectrum = Spectrum_;
+    MI_IMPORT_RENDER_BASIC_TYPES()
+    //! @}
+    // =============================================================
+
+    // =============================================================
+    //! @{ \name Fields
+    // =============================================================
+
+    /// Sampled position
+    Point3f p;
+
+    Spectrum E;
+
+    /// total surface area represented by this sample
+    Float area;
+
+    /// used by the octree construction code
+    uint8_t label;
+
+    //! @}
+    // =============================================================
+
+    // =============================================================
+    //! @{ \name Constructors, methods, etc.
+    // =============================================================
+
+    /// Basic field constructor
+    IrradianceSample(const Point3f &p, const Spectrum &e, const Float &area)
+        : p(p), E(e), area(area) { }
+
+    //! @}
+    // =============================================================
+
+    DRJIT_STRUCT(IrradianceSample, p, E, area, label)
+};
+
 // -----------------------------------------------------------------------------
 
 template <typename Float, typename Spectrum>
