@@ -37,6 +37,7 @@ template <typename Float, typename Spectrum> class Subsurface;
 
 template <typename Float, typename Spectrum> struct DirectionSample;
 template <typename Float, typename Spectrum> struct PositionSample;
+template <typename Float, typename Spectrum> struct MiniPositionSample;
 template <typename Float, typename Spectrum> struct IrradianceSample;
 template <typename Float, typename Spectrum> struct BSDFSample3;
 template <typename Float, typename Spectrum> struct SilhouetteSample;
@@ -68,6 +69,7 @@ template <typename Float_, typename Spectrum_> struct RenderAliases {
 
     using PositionSample3f          = PositionSample<Float, Spectrum>;
     using DirectionSample3f         = DirectionSample<Float, Spectrum>;
+    using MiniPositionSample3f      = MiniPositionSample<Float, Spectrum>;
     using IrradianceSample3f        = IrradianceSample<Float, Spectrum>;
     using BSDFSample3f              = BSDFSample3<Float, Spectrum>;
     using SilhouetteSample3f        = SilhouetteSample<Float, Spectrum>;
@@ -161,6 +163,7 @@ template <typename Float_, typename Spectrum_> struct RenderAliases {
     MI_IMPORT_RENDER_BASIC_TYPES()                                                                 \
     using PositionSample3f          = typename RenderAliases::PositionSample3f;                    \
     using DirectionSample3f         = typename RenderAliases::DirectionSample3f;                   \
+    using MiniPositionSample3f          = typename RenderAliases::MiniPositionSample3f;                    \
     using IrradianceSample3f        = typename RenderAliases::IrradianceSample3f;                   \
     using Interaction3f             = typename RenderAliases::Interaction3f;                       \
     using SurfaceInteraction3f      = typename RenderAliases::SurfaceInteraction3f;                \

@@ -20,7 +20,7 @@
 #include <mitsuba/core/bbox.h>
 #include <mitsuba/core/fwd.h>
 #include <mitsuba/core/object.h>
-#include <mitsuba/core/timer.h>
+#include <mitsuba/core/spectrum.h>
 #include <mitsuba/core/util.h>
 #include <mitsuba/render/fwd.h>
 
@@ -84,7 +84,7 @@ public:
                             std::vector<IrradianceSample3f> &records,
                             uint32_t maxDepth = 24, uint32_t maxItems = 8)
         : m_aabb(aabb), m_maxDepth(maxDepth), m_maxItems(maxItems),
-          m_solidAngleThreshold(solidAngleThreshold), m_root(nullptr) {
+          m_root(nullptr), m_solidAngleThreshold(solidAngleThreshold) {
         m_items.swap(records);
         build();
         propagate(m_root);
@@ -100,8 +100,6 @@ public:
         Log(m_log_level, "Building an octree over %d data points",
             m_items.size());
 
-        ref<Timer> timer = new Timer();
-        timer->begin_stage("IrradianceOctree");
         std::vector<uint32_t> perm(m_items.size()), temp(m_items.size());
 
         for (uint32_t i = 0; i < m_items.size(); ++i)
@@ -115,7 +113,6 @@ public:
 
         /* Apply the permutation */
         permute_inplace(&m_items[0], perm);
-        timer->end_stage("IrradianceOctree");
     }
 
     /// Query the octree using a customizable functor, while representatives for
@@ -125,7 +122,7 @@ public:
         perform_query(m_aabb, m_root, query);
     }
 
-     /// Return the log level of octree status messages
+    /// Return the log level of octree status messages
     LogLevel log_level() const { return m_log_level; }
 
     /// Return the log level of octree status messages
@@ -133,17 +130,16 @@ public:
 
     MI_DECLARE_CLASS()
 protected:
-
     /// Return the AABB for a child of the specified index
     inline BoundingBox childBounds(int child, const BoundingBox &nodeAABB,
                                    const Point &center) const {
         BoundingBox childAABB;
-        childAABB.min.x = (child & 4) ? center.x : nodeAABB.min.x;
-        childAABB.max.x = (child & 4) ? nodeAABB.max.x : center.x;
-        childAABB.min.y = (child & 2) ? center.y : nodeAABB.min.y;
-        childAABB.max.y = (child & 2) ? nodeAABB.max.y : center.y;
-        childAABB.min.z = (child & 1) ? center.z : nodeAABB.min.z;
-        childAABB.max.z = (child & 1) ? nodeAABB.max.z : center.z;
+        childAABB.min.x() = (child & 4) ? center.x() : nodeAABB.min.x();
+        childAABB.max.x() = (child & 4) ? nodeAABB.max.x() : center.x();
+        childAABB.min.y() = (child & 2) ? center.y() : nodeAABB.min.y();
+        childAABB.max.y() = (child & 2) ? nodeAABB.max.y() : center.y();
+        childAABB.min.z() = (child & 1) ? center.z() : nodeAABB.min.z();
+        childAABB.max.z() = (child & 1) ? nodeAABB.max.z() : center.z();
         return childAABB;
     }
 
@@ -160,25 +156,25 @@ protected:
             return result;
         }
 
-        Point center = aabb.getCenter();
+        Point center = aabb.center();
         uint32_t nestedCounts[8];
         memset(nestedCounts, 0, sizeof(uint32_t) * 8);
 
         /* Label all items */
         for (uint32_t *it = start; it != end; ++it) {
             IrradianceSample3f &item = m_items[*it];
-            const Point &p         = item.getPosition();
+            const Point3f &p         = item.p;
 
             uint8_t label = 0;
-            if (p.x > center.x)
+            if (dr::any(p.x() > center.x()))
                 label |= 4;
-            if (p.y > center.y)
+            if (dr::any(p.y() > center.y()))
                 label |= 2;
-            if (p.z > center.z)
+            if (dr::any(p.z() > center.z()))
                 label |= 1;
 
             BoundingBox bounds = childBounds(label, aabb, center);
-            SAssert(bounds.contains(p));
+            Assert(dr::any(bounds.contains(p)));
 
             item.label = label;
             nestedCounts[label]++;
@@ -228,7 +224,7 @@ protected:
                 const IrradianceSample3f &sample = m_items[i + node->offset];
                 repr.E += sample.E * sample.area;
                 repr.area += sample.area;
-                Float weight = sample.E.getLuminance() * sample.area;
+                Float weight = luminance(sample.E, Wavelength()) * sample.area;
                 repr.p += sample.p * weight;
                 weightSum += weight;
             }
@@ -241,7 +237,8 @@ protected:
                 propagate(child);
                 repr.E += child->data.E * child->data.area;
                 repr.area += child->data.area;
-                Float weight = child->data.E.getLuminance() * child->data.area;
+                Float weight =
+                    luminance(child->data.E, Wavelength()) * child->data.area;
                 repr.p += child->data.p * weight;
                 weightSum += weight;
             }
@@ -256,22 +253,22 @@ protected:
     /// distant nodes
     template <typename QueryType>
     void perform_query(const BoundingBox &aabb, OctreeNode *node,
-                      QueryType &query) const {
+                       QueryType &query) const {
         /* Compute the approximate solid angle subtended by samples within this
          * node */
         Float approxSolidAngle =
-            node->data.area / (query.p - node->data.p).lengthSquared();
+            node->data.area / dr::squared_norm(query.p - node->data.p);
 
         /* Use the representative if this is a distant node */
-        if (!aabb.contains(query.p) &&
-            approxSolidAngle < m_solidAngleThreshold) {
+        if (dr::any(!aabb.contains(query.p) &&
+                    approxSolidAngle < m_solidAngleThreshold)) {
             query(node->data);
         } else {
             if (node->leaf) {
                 for (uint32_t i = 0; i < node->count; ++i)
                     query(m_items[node->offset + i]);
             } else {
-                Point center = aabb.getCenter();
+                Point center = aabb.center();
                 for (int i = 0; i < 8; i++) {
                     if (!node->children[i])
                         continue;
@@ -286,6 +283,54 @@ protected:
     inline IrradianceOctree() : m_root(nullptr) {}
 
 private:
+    /**
+     * \brief Apply an arbitrary permutation to an array in linear time
+     *
+     * This algorithm is based on Donald Knuth's book
+     * "The Art of Computer Programming, Volume 3: Sorting and Searching"
+     * (1st edition, section 5.2, page 595)
+     *
+     * Given a permutation and an array of values, it applies the permutation
+     * in linear time without requiring additional memory. This is based on
+     * the fact that each permutation can be decomposed into a disjoint set
+     * of permutations, which can then be applied individually.
+     *
+     * \param data
+     *     Pointer to the data that should be permuted
+     * \param perm
+     *     Input permutation vector having the same size as \c data. After
+     *     the function terminates, this vector will be set to the
+     *     identity permutation.
+     */
+    template <typename DataType, typename IndexType>
+    void permute_inplace(DataType *data, std::vector<IndexType> &perm) {
+        for (size_t i = 0; i < perm.size(); i++) {
+            if (perm[i] != i) {
+                /* The start of a new cycle has been found. Save
+                   the value at this position, since it will be
+                   overwritten */
+                IndexType j     = (IndexType) i;
+                DataType curval = data[i];
+
+                do {
+                    /* Shuffle backwards */
+                    IndexType k = perm[j];
+                    data[j]     = data[k];
+
+                    /* Also fix the permutations on the way */
+                    perm[j] = j;
+                    j       = k;
+
+                    /* Until the end of the cycle has been found */
+                } while (perm[j] != i);
+
+                /* Fix the final position with the saved value */
+                data[j] = curval;
+                perm[j] = j;
+            }
+        }
+    }
+
     BoundingBox m_aabb;
     std::vector<IrradianceSample3f> m_items;
     uint32_t m_maxDepth;
@@ -294,5 +339,7 @@ private:
     Float m_solidAngleThreshold;
     LogLevel m_log_level = Debug;
 };
+
+MI_IMPLEMENT_CLASS_VARIANT(IrradianceOctree, Object)
 
 NAMESPACE_END(mitsuba)

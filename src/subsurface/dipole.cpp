@@ -17,7 +17,6 @@
 */
 
 #include "mitsuba/render/integrator.h"
-#include <mitsuba/core/timer.h>
 #include <mitsuba/render/bluenoise.h>
 #include <mitsuba/render/fresnel.h>
 #include <mitsuba/render/ior.h>
@@ -36,21 +35,21 @@ public:
         : zr(zr), zv(zv), sigmaTr(sigmaTr), result(0.0f), p(p) {}
 
     inline void operator()(const IrradianceSample3f &sample) {
-        Spectrum rSqr = Spectrum((p - sample.p).lengthSquared());
+        Spectrum rSqr = Spectrum(dr::squared_norm(p - sample.p));
 
         /* Distance to the real source */
-        Spectrum dr = (rSqr + zr * zr).sqrt();
+        Spectrum dr = dr::sqrt(rSqr + zr * zr);
 
         /* Distance to the image point source */
-        Spectrum dv = (rSqr + zv * zv).sqrt();
+        Spectrum dv = dr::sqrt(rSqr + zv * zv);
 
         Spectrum C1 = zr * (sigmaTr + Spectrum(1.0f) / dr);
         Spectrum C2 = zv * (sigmaTr + Spectrum(1.0f) / dv);
 
         /* Do not include the reduced albedo - will be canceled out later */
         Spectrum dMo = Spectrum(dr::InvFourPi<Float>) *
-                       (C1 * ((-sigmaTr * dr).exp()) / (dr * dr) +
-                        C2 * ((-sigmaTr * dv).exp()) / (dv * dv));
+                       (C1 * (dr::exp(-sigmaTr * dr)) / (dr * dr) +
+                        C2 * (dr::exp(-sigmaTr * dv)) / (dv * dv));
 
         result += dMo * sample.E * sample.area;
     }
@@ -103,24 +102,22 @@ public:
         m_g       = props.texture<Texture>("g", 1.0);
     }
 
-    bool preprocess(const Scene *scene) override {
+    bool preprocess(const Scene *scene, Sampler *sampler) override {
         if (m_octree)
             return true;
-
-        ref<Timer> timer = new Timer();
 
         BoundingBox3f aabb;
         Float sa;
 
-        std::vector<PositionSample3f> points;
+        std::vector<MiniPositionSample3f> points;
         /* It is necessary to increase the sampling resolution to
            prevent low-frequency noise in the output */
         Float actualRadius = m_radius / dr::sqrt(m_sample_multiplier * 20);
 
         BlueNoiseSampler<Float, Spectrum> bns{};
 
-        bns.blueNoisePointSet(scene, m_shapes, 0, actualRadius, &points, sa,
-                              aabb);
+        bns.blueNoisePointSet(scene, m_shapes, 0, sampler, actualRadius,
+                              &points, sa, aabb);
 
         /* 2. Gather irradiance in parallel */
         ref<Sensor> sensor = scene->sensors()[0];
@@ -135,30 +132,31 @@ public:
             dynamic_cast<const SamplingIntegrator<Float, Spectrum> *>(
                 scene->integrator());
 
-        ref<Sampler> sampler = sensor->sampler()->clone();
+        ref<Sampler> samplr = sampler->clone();
 
         for (size_t i = 0; i < points.size(); ++i) {
             /* Create a fake intersection record */
-            const PositionSample ps = points[i];
+            const MiniPositionSample mps = points[i];
+
+            PositionSample3f ps{ mps.p, mps.n, {}, time, 0.0, false };
 
             SurfaceInteraction3f si(ps, Wavelength());
-            si.p        = ps.p;
-            si.sh_frame = Frame3f(ps.n);
+            si.p        = mps.p;
+            si.sh_frame = Frame3f(mps.n);
             // si.shape = scene->shapes()[sample.shapeIndex].get();
             si.time   = time;
             si.duv_dx = 0;
             si.duv_dy = 0;
-            // LINE of sanity
 
             Spectrum E = 0.0;
             for (int i = 0; i < m_irr_samples; ++i) {
                 auto [direct, weight, emitter] = scene->sample_emitter_ray(
-                    time, sampler->next_1d(true), sampler->next_2d(true),
-                    sampler->next_2d(true));
+                    time, samplr->next_1d(true), samplr->next_2d(true),
+                    samplr->next_2d(true));
 
-                E += integrator->sample(scene, sampler, direct);
+                E += integrator->sample(scene, samplr, direct).first;
                 if (m_irr_indirect) {
-                    // unimplemente for now
+                    // unimplemented for now
                     //     RayDifferential3f indirect{ si.p, d, si.time };
                     //     integrator->sample(scene, sampler, indirect);
                 }
@@ -181,7 +179,7 @@ public:
                 const SurfaceInteraction3f &si, const Vector3f &d,
                 UInt32 /*depth*/) const override {
 
-       if (dr::any(dr::dot(si.sh_frame.n, d) < 0))
+        if (dr::any(dr::dot(si.sh_frame.n, d) < 0))
             return 0.f;
 
         Spectrum sigma_s       = m_albedo->eval(si) * m_sigma_t->eval(si);

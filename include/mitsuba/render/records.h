@@ -195,6 +195,50 @@ struct DirectionSample : public PositionSample<Float_, Spectrum_> {
 };
 
 template <typename Float_, typename Spectrum_>
+struct MiniPositionSample {
+public:
+    // =============================================================
+    //! @{ \name Type declarations
+    // =============================================================
+
+    using Float    = Float_;
+    using Spectrum = Spectrum_;
+    MI_IMPORT_RENDER_BASIC_TYPES()
+    //! @}
+    // =============================================================
+
+    // =============================================================
+    //! @{ \name Fields
+    // =============================================================
+
+    /// Sampled position
+    Point3f p;
+
+    /// Sampled surface normal (if applicable)
+    Normal3f n;
+
+    /// total surface area represented by this sample
+    int shapeIndex;
+
+    //! @}
+    // =============================================================
+
+    // =============================================================
+    //! @{ \name Constructors, methods, etc.
+    // =============================================================
+
+    /// Basic field constructor
+    MiniPositionSample(const Point3f &p, const Normal3f &n, int shapeIndex)
+        : p(p), n(n), shapeIndex(shapeIndex) { }
+
+    //! @}
+    // =============================================================
+
+    DRJIT_STRUCT(MiniPositionSample, p, shapeIndex)
+};
+
+
+template <typename Float_, typename Spectrum_>
 struct IrradianceSample {
 public:
     // =============================================================

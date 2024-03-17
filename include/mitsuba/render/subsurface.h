@@ -52,7 +52,7 @@ public:
      * camera and sample generator, which have been made available to all
      * local and remote workers.
      */
-    virtual bool preprocess(const Scene *scene) = 0;
+    virtual bool preprocess(const Scene *scene, Sampler *sampler) = 0;
 
     DRJIT_VCALL_REGISTER(Float, mitsuba::Subsurface)
 
@@ -63,7 +63,7 @@ protected:
     virtual ~Subsurface();
 
 protected:
-    std::vector<Shape *> m_shapes;
+    std::vector<ref<Shape>> m_shapes;
 };
 
 
